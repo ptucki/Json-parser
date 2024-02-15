@@ -1,0 +1,8 @@
+{
+  "name":"John",
+  "age":30,
+  "car": [ 1993, null, false, "Start", { 
+    "car": "ford",
+    "age": 19
+  }]
+}
