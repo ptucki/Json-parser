@@ -1,19 +1,75 @@
 #include <iostream>
 #include <cctype>
 #include <string>
-//#include <functional>
 
 #include "json.h"
 
 Json::ParsingState Json::parsing_state{ Json::ParsingState::Undefined };
 
-Json::Json(std::string name, Json* parent)
-  : name_{ name }
+Json::Json(std::string key, Json* parent)
+  : key_{ key }
   , parent_ { parent }
-  , value_type_{ ValueType::Undefined }
+  , value_type_{ ValueType::Null }
   , number_{ 0.0l }
 {
-  std::cout << "Json created!" << std::endl;
+
+}
+
+Json::Json(const Json& obj)
+: parent_{ nullptr }
+, key_{obj.key_}
+, value_type_{obj.value_type_}
+, string_{obj.string_}
+, number_{obj.number_}
+{
+  objects_.reserve(obj.objects_.size());
+
+  for (auto& json : obj.objects_)
+  {
+    objects_.push_back(std::make_unique<Json>(*json));
+  }
+}
+
+Json::Json(Json&& obj) noexcept
+  : parent_{ nullptr }
+  , key_{ "" }
+  , value_type_{ ValueType::Undefined }
+  , string_{ "" }
+  , number_{ 0.0 }
+{
+  std::swap(parent_, obj.parent_);
+  std::swap(key_, obj.key_);
+  std::swap(value_type_, obj.value_type_);
+  std::swap(string_, obj.string_);
+  std::swap(number_, obj.number_);
+}
+
+Json& Json::operator=(const Json& obj)
+{
+  objects_.reserve(obj.objects_.size());
+
+  for (auto& json : obj.objects_)
+  {
+    objects_.push_back(std::make_unique<Json>(*json));
+  }
+  return *this;
+}
+
+Json& Json::operator=(Json&& obj) noexcept
+{
+  parent_ = obj.parent_;
+  key_ = obj.key_;
+  value_type_ = obj.value_type_;
+  string_ = obj.string_;
+  number_ = obj.number_;
+
+  obj.parent_ = nullptr;
+  obj.key_ = "";
+  obj.value_type_ = ValueType::Undefined;
+  obj.string_ = "";
+  obj.number_ = 0;
+
+  return *this;
 }
 
 Json& Json::AddNewPair()
@@ -22,12 +78,20 @@ Json& Json::AddNewPair()
   return *objects_.back();
 }
 
-void Json::SetName(std::string_view name)
+Json& Json::AddNewPair(ValueType value_type)
 {
-  name_ = name;
+  objects_.push_back(std::make_unique<Json>("", this));
+  auto& added_object = *objects_.back();
+  added_object.SetType(value_type);
+  return added_object;
 }
 
-void Json::SetValueType(ValueType type)
+void Json::SetKey(std::string_view key)
+{
+  key_ = key;
+}
+
+void Json::SetType(ValueType type)
 {
   value_type_ = type;
 }
@@ -36,8 +100,8 @@ void Json::SetValue(const std::string& value)
 {
   switch (value_type_)
   {
-  case Json::ValueType::Undefined:
-    break;
+  //case Json::ValueType::Undefined:
+  //  break;
 
   case Json::ValueType::String:
     string_ = value;
@@ -47,19 +111,11 @@ void Json::SetValue(const std::string& value)
     number_ = std::stold(value);
     break;
 
-  case Json::ValueType::Object:
-    break;
+  //case Json::ValueType::Object:
+  //  break;
 
-  case Json::ValueType::Array:
-    break;
-
-  //case Json::ValueType::Boolean:
-    //boolean_ = value == "true" ? true : false;
-    //break;
-
-  //case Json::ValueType::Null:
-    //null_ = true;
-    //break;
+  //case Json::ValueType::Array:
+  //  break;
 
   default:
     break;
@@ -72,14 +128,25 @@ Json::ValueType Json::GetType() const
   return value_type_;
 }
 
-std::string& Json::GetName()
+const std::string& Json::GetKey() const
 {
-  return name_;
+  return key_;
+}
+
+Json* Json::GetParent() const
+{
+  return parent_;
+}
+
+void Json::SetParent(Json* parent)
+{
+  parent_ = parent;
 }
 
 std::unique_ptr<Json> Json::Parse(const std::string& data)
 {
   auto root = std::make_unique<Json>("", nullptr);
+  root->SetType(ValueType::Undefined);
   auto current = root.get();
 
   auto it = std::begin(data);
@@ -98,12 +165,12 @@ std::unique_ptr<Json> Json::Parse(const std::string& data)
       break;
 
     case '{':
-      current->SetValueType(ValueType::Object);
+      current->SetType(ValueType::Object);
       parsing_state = ParsingState::Object;
       break;
 
     case '[':
-      current->SetValueType(ValueType::Array);
+      current->SetType(ValueType::Array);
       parsing_state = ParsingState::Array;
       break;
 
@@ -150,13 +217,9 @@ void Json::ParseString(char_iterator& ch, char_iterator& end, Json* current)
     case '\"':
       if (current->GetType() == ValueType::Object)
       {
-        if (parsing_state == ParsingState::ObjectName) {
-          current->SetName(value);
+        if (parsing_state == ParsingState::Key) {
+          current->SetKey(value);
         }
-        //else if (parsing_state == ParsingState::String)
-        //{
-        //  current->SetValue(value);
-        //}
         parsing_state = ParsingState::Object;
         return;
       }
@@ -259,11 +322,6 @@ void Json::ParseNumber(char_iterator& ch, char_iterator& end, Json* current)
   }
 }
 
-//void Json::ParseBoolNull(char_iterator& ch, char_iterator& end, Json* current)
-//{
-//
-//}
-
 void Json::ParseEscapeChar(char_iterator& ch, char_iterator& end, std::string& str)
 {
   ++ch;
@@ -323,7 +381,7 @@ void Json::ParseEscapeChar(char_iterator& ch, char_iterator& end, std::string& s
 void Json::ParseArray(char_iterator& ch, char_iterator& end, Json* current)
 {
   current = &current->AddNewPair();
-  current->SetValueType(ValueType::Array);
+  current->SetType(ValueType::Array);
 
   while (ch != end)
   {
@@ -345,7 +403,6 @@ void Json::ParseArray(char_iterator& ch, char_iterator& end, Json* current)
       return;
 
     case ',':
-      //current = current->parent_;
       break;
 
     case '\"':
@@ -371,14 +428,10 @@ void Json::ParseArray(char_iterator& ch, char_iterator& end, Json* current)
     case '{':
       parsing_state = ParsingState::Value;
       current = &current->AddNewPair();
-      current->SetValueType(ValueType::Object);
+      current->SetType(ValueType::Object);
       GetParsingMethod(parsing_state)(ch, end, current);
       current = current->parent_;
       break;
-      //parsing_state = ParsingState::Object;
-      //GetParsingMethod(parsing_state)(ch, end, current);
-      //current = current->parent_;
-      //break;
 
     default:
       break;
@@ -392,9 +445,9 @@ void Json::ParseArray(char_iterator& ch, char_iterator& end, Json* current)
 void Json::ParseObject(char_iterator& ch, char_iterator& end, Json* current)
 {
   current = &current->AddNewPair();
-  current->SetValueType(ValueType::Object);
+  current->SetType(ValueType::Object);
   std::string name = "";
-  bool is_name_set = false;
+  bool is_key_set = false;
 
   while (ch != end)
   {
@@ -411,9 +464,9 @@ void Json::ParseObject(char_iterator& ch, char_iterator& end, Json* current)
     case '\"':
       if (parsing_state == ParsingState::Object)
       {
-        parsing_state = ParsingState::ObjectName;
+        parsing_state = ParsingState::Key;
         GetParsingMethod(parsing_state)(ch, end, current);
-        is_name_set = true;
+        is_key_set = true;
       }
       else {
         parsing_state = ParsingState::Undefined;
@@ -426,7 +479,7 @@ void Json::ParseObject(char_iterator& ch, char_iterator& end, Json* current)
       return;
 
     case ':':
-      if (is_name_set)
+      if (is_key_set)
       {
         parsing_state = ParsingState::Value;
         GetParsingMethod(parsing_state)(++ch, end, current);
@@ -434,14 +487,13 @@ void Json::ParseObject(char_iterator& ch, char_iterator& end, Json* current)
       else
       {
         parsing_state = ParsingState::Undefined;
-        // ':' should be after the declaration of name
       }
       break;
 
     case ',':
       current = current->parent_;
       current = &current->AddNewPair();
-      current->SetValueType(ValueType::Object);
+      current->SetType(ValueType::Object);
       break;
 
     default:
@@ -471,7 +523,7 @@ void Json::ParseValue(char_iterator& ch, char_iterator& end, Json* current)
       break;
 
     case '\"':
-      current->SetValueType(ValueType::String);
+      current->SetType(ValueType::String);
       parsing_state = ParsingState::String;
       GetParsingMethod(parsing_state)(ch, end, current);
       return;
@@ -480,7 +532,7 @@ void Json::ParseValue(char_iterator& ch, char_iterator& end, Json* current)
     case 't':
       if (ExpectKeyword(ch, end, "true"))
       {
-        current->SetValueType(ValueType::True);
+        current->SetType(ValueType::True);
         parsing_state = ParsingState::Object;
         ch += 3;
       }
@@ -493,7 +545,7 @@ void Json::ParseValue(char_iterator& ch, char_iterator& end, Json* current)
     case 'f':
       if (ExpectKeyword(ch, end, "false"))
       {
-        current->SetValueType(ValueType::False);
+        current->SetType(ValueType::False);
         parsing_state = ParsingState::Object;
         ch += 4;
       }
@@ -506,7 +558,7 @@ void Json::ParseValue(char_iterator& ch, char_iterator& end, Json* current)
     case 'n':
       if (ExpectKeyword(ch, end, "null"))
       {
-        current->SetValueType(ValueType::Null);
+        current->SetType(ValueType::Null);
         parsing_state = ParsingState::Object;
         ch += 3;
       }
@@ -537,7 +589,7 @@ void Json::ParseValue(char_iterator& ch, char_iterator& end, Json* current)
     case '8':
     case '9':
     case '0':
-      current->SetValueType(ValueType::Number);
+      current->SetType(ValueType::Number);
       parsing_state = ParsingState::Number;
       GetParsingMethod(parsing_state)(ch, end, current);
       return;
@@ -551,13 +603,13 @@ void Json::ParseValue(char_iterator& ch, char_iterator& end, Json* current)
   }
 }
 
-decltype(&Json::ParseObject) Json::GetParsingMethod(ParsingState state)
+Json::ParsingMethodType Json::GetParsingMethod(ParsingState state)
 {
   switch (state)
   {
   case ParsingState::Object:      return ParseObject;
   case ParsingState::Array:       return ParseArray;
-  case ParsingState::ObjectName:
+  case ParsingState::Key:
   case ParsingState::String:      return ParseString;
   case ParsingState::Number:      return ParseNumber;
   case ParsingState::Value:       return ParseValue;
@@ -583,4 +635,68 @@ bool Json::ExpectKeyword(char_iterator& ch, char_iterator& end, std::string keyw
   }
 
   return false;
+}
+
+Json* Json::AddChild(std::string_view data, std::string_view key)
+{
+  if (key.empty()) return nullptr;
+  if (this->value_type_ != ValueType::Object) return nullptr;
+
+  this->AddNewPair(ValueType::String);
+  auto& new_object = objects_.back();
+  new_object->key_ = key;
+  new_object->string_ = data;
+
+  return new_object.get();
+}
+
+Json* Json::AddChild(bool data, std::string_view key)
+{
+  if (key.empty()) return nullptr;
+  if (this->value_type_ != ValueType::Object) return nullptr;
+
+  ValueType value_type = data == true ? ValueType::True : ValueType::False;
+  this->AddNewPair(value_type);
+  auto& new_object = objects_.back();
+  new_object->key_ = key;
+
+  return new_object.get();
+}
+
+Json* Json::AddChild(std::string_view key)
+{
+  if (key.empty()) return nullptr;
+  if (this->value_type_ != ValueType::Object) return nullptr;
+
+  this->AddNewPair(ValueType::Null);
+  auto& new_object = objects_.back();
+  new_object->key_ = key;
+
+  return new_object.get();
+}
+
+Json* Json::AddChild(long data, std::string_view key)
+{
+  if (key.empty()) return nullptr;
+  if (this->value_type_ != ValueType::Object) return nullptr;
+
+  this->AddNewPair(ValueType::Number);
+  auto& new_object = objects_.back();
+  new_object->key_ = key;
+  new_object->number_ = data;
+
+  return new_object.get();
+}
+
+Json* Json::AddChild(long double data, std::string_view key)
+{
+  if (key.empty()) return nullptr;
+  if (this->value_type_ != ValueType::Object) return nullptr;
+
+  this->AddNewPair(ValueType::Number);
+  auto& new_object = objects_.back();
+  new_object->key_ = key;
+  new_object->number_ = data;
+
+  return new_object.get();
 }
