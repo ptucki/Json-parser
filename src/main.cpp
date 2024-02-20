@@ -13,7 +13,8 @@ int main()
     auto ptr = Json::Parse(my_file.GetContent());
 
     Json first("first1", nullptr);
-    auto temp = first.AddChild(true, "wow");
+    first.SetValue(5);
+    //auto temp = first.AddChild(true, "wow");
     if (first.AddChild(1.3l, "da") == nullptr) {
       std::cout << "nullptr :<" << std::endl;
     }

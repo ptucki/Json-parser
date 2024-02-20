@@ -123,6 +123,19 @@ void Json::SetValue(const std::string& value)
 
 }
 
+void Json::ConvertToArray()
+{
+  if (value_type_ == ValueType::Array) return;
+
+  std::unique_ptr<Json> copy = std::make_unique<Json>(std::move(*this));
+  this->SetType(ValueType::Array);
+  this->key_ = copy->key_;
+
+  copy->key_ = "";
+  copy->SetParent(this);
+  this->objects_.push_back(std::move(copy));
+}
+
 Json::ValueType Json::GetType() const
 {
   return value_type_;
@@ -380,9 +393,6 @@ void Json::ParseEscapeChar(char_iterator& ch, char_iterator& end, std::string& s
 
 void Json::ParseArray(char_iterator& ch, char_iterator& end, Json* current)
 {
-  current = &current->AddNewPair();
-  current->SetType(ValueType::Array);
-
   while (ch != end)
   {
     switch (*ch)
@@ -574,6 +584,7 @@ void Json::ParseValue(char_iterator& ch, char_iterator& end, Json* current)
       return;
 
     case '[':
+      current->SetType(ValueType::Array);
       parsing_state = ParsingState::Array;
       GetParsingMethod(parsing_state)(ch, end, current);
       return;

@@ -36,6 +36,11 @@ public:
   void SetKey(std::string_view name);
   void SetType(ValueType type);
   void SetParent(Json* parent);
+  void SetValue(int value) {
+    if (value_type_ != ValueType::Null) return;
+    value_type_ = ValueType::Number;
+    number_ = value;
+  }
 
   /* Object maniputaion methods */
   /* - Add child elements */
@@ -44,6 +49,15 @@ public:
   Json* AddChild(std::string_view data, std::string_view key);
   Json* AddChild(bool data, std::string_view key);
   Json* AddChild(std::string_view key);
+
+
+  void Reset() {
+    value_type_ = ValueType::Null;
+    string_.clear();
+    number_ = 0;
+    objects_.clear();
+
+  }
 
   template<typename T>
   inline typename std::enable_if<std::is_same<std::remove_reference_t<T>, Json>::value, Json*>::type
@@ -83,6 +97,9 @@ private:
   Json& AddNewPair();
   Json& AddNewPair(ValueType value_type);
   void SetValue(const std::string& value);
+  
+
+  void ConvertToArray();
 
   Json* parent_;
   std::string key_;
