@@ -21,6 +21,7 @@ public:
     Null,
   };
 
+  Json();
   Json(std::string key, Json* parent);
   Json(const Json& obj);
   Json(Json&& obj) noexcept;
@@ -32,37 +33,38 @@ public:
   Json::ValueType GetType() const;
   const std::string& GetKey() const;
   Json* GetParent() const;
+  std::vector<std::unique_ptr<Json>>& GetChildren();
+
+  long double GetNumberValue() const;
+  const std::string& GetStringValue() const;
+  bool GetBoolValue() const;
 
   void SetKey(std::string_view name);
-  void SetType(ValueType type);
   void SetParent(Json* parent);
-  void SetValue(int value) {
-    if (value_type_ != ValueType::Null) return;
-    value_type_ = ValueType::Number;
-    number_ = value;
-  }
+  void SetValue(long value);
 
   /* Object maniputaion methods */
   /* - Add child elements */
-  Json* AddChild(long double data, std::string_view key);
+  Json* AddChild(double data, std::string_view key);
+  Json* AddChild(int data, std::string_view key);
   Json* AddChild(long data, std::string_view key);
   Json* AddChild(std::string_view data, std::string_view key);
   Json* AddChild(bool data, std::string_view key);
   Json* AddChild(std::string_view key);
 
-
-  void Reset() {
-    value_type_ = ValueType::Null;
-    string_.clear();
-    number_ = 0;
-    objects_.clear();
-
-  }
+  Json* AddValue(long double data);
+  //Json* AddValue(long data);
+  //Json* AddValue(std::string_view data);
+  //Json* AddValue(bool data);
+  //Json* AddValue();
 
   template<typename T>
   inline typename std::enable_if<std::is_same<std::remove_reference_t<T>, Json>::value, Json*>::type
     AddChild(T&& json_object);
 
+  void Reset();
+
+  /* Parsing methods */
   static std::unique_ptr<Json> Parse(const std::string& data);
 
 private:
@@ -83,6 +85,9 @@ private:
     EscapeChar
   };
 
+  /* Accessors and mutators */
+  void SetType(ValueType type);
+
   /* Parsing methods */
   static void ParseString(char_iterator& ch, char_iterator& end, Json* current);
   static void ParseArray(char_iterator& ch, char_iterator& end, Json* current);
@@ -98,7 +103,6 @@ private:
   Json& AddNewPair(ValueType value_type);
   void SetValue(const std::string& value);
   
-
   void ConvertToArray();
 
   Json* parent_;
@@ -117,7 +121,6 @@ template<typename T>
 inline typename std::enable_if<std::is_same<std::remove_reference_t<T>, Json>::value, Json*>::type
 Json::AddChild(T&& json_object)
 {
-
   if (this->value_type_ != ValueType::Object) return nullptr;
 
   auto obj = std::make_unique<Json>(std::forward<T>(json_object));

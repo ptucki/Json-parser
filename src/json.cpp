@@ -6,6 +6,14 @@
 
 Json::ParsingState Json::parsing_state{ Json::ParsingState::Undefined };
 
+Json::Json()
+  : key_{ "" }
+  , parent_{ nullptr }
+  , value_type_{ ValueType::Object }
+  , number_{ 0.0l }
+{
+}
+
 Json::Json(std::string key, Json* parent)
   : key_{ key }
   , parent_ { parent }
@@ -151,9 +159,37 @@ Json* Json::GetParent() const
   return parent_;
 }
 
+std::vector<std::unique_ptr<Json>>& Json::GetChildren()
+{
+  return objects_;
+}
+
+long double Json::GetNumberValue() const
+{
+  return number_;
+}
+
+const std::string& Json::GetStringValue() const
+{
+  return string_;
+}
+
+bool Json::GetBoolValue() const
+{
+  return value_type_ == ValueType::True ? true : false;
+}
+
 void Json::SetParent(Json* parent)
 {
   parent_ = parent;
+}
+
+void Json::SetValue(long value)
+{
+  //if (value_type_ != ValueType::Null) return;
+  Reset();
+  value_type_ = ValueType::Number;
+  number_ = value;
 }
 
 std::unique_ptr<Json> Json::Parse(const std::string& data)
@@ -455,6 +491,7 @@ void Json::ParseArray(char_iterator& ch, char_iterator& end, Json* current)
 void Json::ParseObject(char_iterator& ch, char_iterator& end, Json* current)
 {
   current = &current->AddNewPair();
+
   current->SetType(ValueType::Object);
   std::string name = "";
   bool is_key_set = false;
@@ -486,6 +523,10 @@ void Json::ParseObject(char_iterator& ch, char_iterator& end, Json* current)
 
     case '}':
       current = current->parent_;
+      if (current->objects_.size() > 0 && current->objects_[0]->key_ == "")
+      {
+        current->objects_.pop_back();
+      }
       return;
 
     case ':':
@@ -664,7 +705,11 @@ Json* Json::AddChild(std::string_view data, std::string_view key)
 Json* Json::AddChild(bool data, std::string_view key)
 {
   if (key.empty()) return nullptr;
-  if (this->value_type_ != ValueType::Object) return nullptr;
+  if (value_type_ == ValueType::Null)
+  {
+    value_type_ = ValueType::Object;
+  }
+  else if (this->value_type_ != ValueType::Object) return nullptr;
 
   ValueType value_type = data == true ? ValueType::True : ValueType::False;
   this->AddNewPair(value_type);
@@ -686,6 +731,28 @@ Json* Json::AddChild(std::string_view key)
   return new_object.get();
 }
 
+Json* Json::AddValue(long double data)
+{
+  if (value_type_ == ValueType::Array)
+  {
+
+  }
+  else {
+    this->ConvertToArray();
+    auto& newValue = this->AddNewPair(ValueType::Number);
+    newValue.SetValue(data);
+  }
+  return nullptr;
+}
+
+void Json::Reset()
+{
+  value_type_ = ValueType::Null;
+  string_.clear();
+  number_ = 0;
+  objects_.clear();
+}
+
 Json* Json::AddChild(long data, std::string_view key)
 {
   if (key.empty()) return nullptr;
@@ -699,7 +766,20 @@ Json* Json::AddChild(long data, std::string_view key)
   return new_object.get();
 }
 
-Json* Json::AddChild(long double data, std::string_view key)
+Json* Json::AddChild(double data, std::string_view key)
+{
+  if (key.empty()) return nullptr;
+  if (this->value_type_ != ValueType::Object) return nullptr;
+
+  this->AddNewPair(ValueType::Number);
+  auto& new_object = objects_.back();
+  new_object->key_ = key;
+  new_object->number_ = data;
+
+  return new_object.get();
+}
+
+Json* Json::AddChild(int data, std::string_view key)
 {
   if (key.empty()) return nullptr;
   if (this->value_type_ != ValueType::Object) return nullptr;
