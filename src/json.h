@@ -6,6 +6,8 @@
 #include <concepts>
 #include <memory>
 #include <variant>
+#include <any>
+#include <functional>
 #include <utility>
 #include <type_traits>
 
@@ -51,11 +53,7 @@ public:
   Json(Json&& obj) noexcept;
   Json& operator=(const Json& obj);
   Json& operator=(Json&& obj) noexcept;
-  //~Json() = default;
-  ~Json() {
-    std::cout << "Deleted" << std::endl;
-  }
-
+  ~Json() = default;
 
   /* Accessors and mutators */
   Json::ValueType GetType() const;
@@ -77,10 +75,10 @@ public:
   std::unique_ptr<Json> Detach();
   bool RemoveChild(int index);
 
-
   bool IsValid() const;
   bool IsRoot() const;
-  bool isArrayElement() const;
+  bool IsArrayElement() const;
+  bool IsLastChild() const;
 
   Json* operator[](std::string_view key);
   Json* operator[](int index);
@@ -93,6 +91,10 @@ public:
   template<typename T>
   Json* AddValue(T&& data);
 
+  void ForEachChild(const std::function<void(const Json&)>& function) const;
+
+  /* Json conversion to string */
+  std::string ToString() const;
 
   /* Parsing methods */
   static std::unique_ptr<Json> Parse(const std::string& data);
@@ -133,6 +135,9 @@ private:
   Json& AddNewPair(ValueType value_type);
   
   void ConvertToArray();
+
+  /* Json conversion to string */
+  void ToString(std::string& str) const;
 
   Json* parent_;
   std::string key_;

@@ -2,6 +2,7 @@
 #include <cctype>
 #include <cassert>
 #include <string>
+#include <format>
 
 #include "json.h"
 
@@ -158,6 +159,113 @@ void Json::ConvertToArray()
   children.push_back(std::move(copy));
 }
 
+void Json::ToString(std::string& str) const
+{
+
+  switch (value_type_)
+  {
+  case Json::ValueType::String:
+    {
+      auto& value = std::get<String>(value_);
+
+      if (IsArrayElement())
+      {
+        str += std::format("\"{}\"", value);
+      }
+      else
+      {
+        str += std::format("\"{}\" : \"{}\"", key_, value);
+      }
+    }
+    break;
+
+  case Json::ValueType::Number:
+    {
+      auto& value = std::get<Number>(value_);
+
+      if (IsArrayElement())
+      {
+        str += std::to_string(value);
+      }
+      else
+      {
+        str += std::format("\"{}\" : {}", key_, std::to_string(value));
+      }
+    }
+    break;
+
+  case Json::ValueType::Bool:
+    {
+      auto& value = std::get<Bool>(value_);
+
+      if (IsArrayElement())
+      {
+        str += (value == true ? "true" : "false");
+      }
+      else
+      {
+        std::string bool_value = value == true ? "true" : "false";
+        str += std::format("\"{}\" : {}", key_, bool_value);
+      }
+    }
+    break;
+
+  case Json::ValueType::Object:
+    {
+      if (IsArrayElement() || IsRoot())
+      {
+        str.append(1, '{');
+      }
+      else
+      {
+        str += std::format("\"{}\" : {{", key_);
+      }
+      
+      ForEachChild([&str](const Json& child) -> void {
+        child.ToString(str);
+        if (!child.IsLastChild()) str.append(1, ',');
+        });
+      str.append(1, '}');
+    }
+    break;
+
+  case Json::ValueType::Array:
+
+    if (IsArrayElement())
+    {
+      str.append(1, '[');
+    }
+    else
+    {
+      str += std::format("\"{}\" : [", key_);
+    }
+
+    ForEachChild([&str](const Json& child) -> void {
+      child.ToString(str);
+      if (!child.IsLastChild()) str.append(1, ',');
+      });
+    str.append(1, ']');
+    break;
+
+  case Json::ValueType::Null:
+  {
+    if (IsArrayElement())
+    {
+      str += "null";
+    }
+    else
+    {
+      str += std::format("\"{}\" : null", key_);
+    }
+  }
+    break;
+
+  default:
+    str.clear();
+    return;
+  }
+}
+
 Json::ValueType Json::GetType() const
 {
   return value_type_;
@@ -243,10 +351,16 @@ bool Json::IsRoot() const
   return parent_ == nullptr ? true : false;
 }
 
-bool Json::isArrayElement() const
+bool Json::IsArrayElement() const
 {
   if (parent_ == nullptr) return false;
   return parent_->GetType() == ValueType::Array;
+}
+
+bool Json::IsLastChild() const
+{
+  auto& parents_value = std::get<ChildrenList>(parent_->value_);
+  return parents_value.back().get() == this;
 }
 
 Json* Json::operator[](std::string_view key)
@@ -270,6 +384,28 @@ Json* Json::operator[](int index)
 
 
   return std::get<ChildrenList>(value_)[index].get();
+}
+
+void Json::ForEachChild(const std::function<void(const Json&)>& function) const
+{
+  if (std::holds_alternative<ChildrenList>(value_))
+  {
+    auto& children = std::get<ChildrenList>(value_);
+
+    for (auto& element : children)
+    {
+      function(*element);
+    }
+  }
+}
+
+std::string Json::ToString() const
+{
+  std::string json_string;
+
+  this->ToString(json_string);
+
+  return json_string;
 }
 
 std::unique_ptr<Json> Json::Parse(const std::string& data)
