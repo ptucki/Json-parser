@@ -1,5 +1,6 @@
 #include <iostream>
 #include <cctype>
+#include <cassert>
 #include <string>
 
 #include "json.h"
@@ -9,8 +10,7 @@ Json::ParsingState Json::parsing_state{ Json::ParsingState::Undefined };
 Json::Json()
   : key_{ "" }
   , parent_{ nullptr }
-  , value_type_{ ValueType::Object }
-  , number_{ 0.0l }
+  , value_type_{ ValueType::Null }
 {
 }
 
@@ -18,7 +18,6 @@ Json::Json(std::string key, Json* parent)
   : key_{ key }
   , parent_ { parent }
   , value_type_{ ValueType::Null }
-  , number_{ 0.0l }
 {
 
 }
@@ -27,14 +26,25 @@ Json::Json(const Json& obj)
 : parent_{ nullptr }
 , key_{obj.key_}
 , value_type_{obj.value_type_}
-, string_{obj.string_}
-, number_{obj.number_}
 {
-  objects_.reserve(obj.objects_.size());
+  if (std::holds_alternative<String>(obj.value_)) value_ = std::get<String>(obj.value_);
+  if (std::holds_alternative<Number>(obj.value_)) value_ = std::get<Number>(obj.value_);
+  if (std::holds_alternative<Bool>(obj.value_)) value_ = std::get<Bool>(obj.value_);
 
-  for (auto& json : obj.objects_)
+  if (std::holds_alternative<ChildrenList>(obj.value_))
   {
-    objects_.push_back(std::make_unique<Json>(*json));
+    auto& objChildren = std::get<ChildrenList>(obj.value_);
+    
+    value_ = ChildrenList();
+    auto& copyChildren = std::get<ChildrenList>(value_);
+    copyChildren.reserve(objChildren.size());
+
+
+    for (auto& json : objChildren)
+    {
+      copyChildren.push_back(std::make_unique<Json>(*json));
+      copyChildren.back()->parent_ = this;
+    }
   }
 }
 
@@ -42,24 +52,34 @@ Json::Json(Json&& obj) noexcept
   : parent_{ nullptr }
   , key_{ "" }
   , value_type_{ ValueType::Undefined }
-  , string_{ "" }
-  , number_{ 0.0 }
 {
   std::swap(parent_, obj.parent_);
   std::swap(key_, obj.key_);
   std::swap(value_type_, obj.value_type_);
-  std::swap(string_, obj.string_);
-  std::swap(number_, obj.number_);
+  std::swap(value_, obj.value_);
 }
 
 Json& Json::operator=(const Json& obj)
 {
-  objects_.reserve(obj.objects_.size());
+  if (std::holds_alternative<String>(obj.value_)) value_ = std::get<String>(obj.value_);
+  if (std::holds_alternative<Number>(obj.value_)) value_ = std::get<Number>(obj.value_);
+  if (std::holds_alternative<Bool>(obj.value_)) value_ = std::get<Bool>(obj.value_);
 
-  for (auto& json : obj.objects_)
+  if (std::holds_alternative<ChildrenList>(obj.value_))
   {
-    objects_.push_back(std::make_unique<Json>(*json));
+    auto& objChildren = std::get<ChildrenList>(obj.value_);
+
+    value_ = ChildrenList();
+    auto& copyChildren = std::get<ChildrenList>(value_);
+    copyChildren.reserve(objChildren.size());
+
+    for (auto& json : objChildren)
+    {
+      copyChildren.push_back(std::make_unique<Json>(*json));
+      copyChildren.back()->parent_ = this;
+    }
   }
+
   return *this;
 }
 
@@ -68,33 +88,36 @@ Json& Json::operator=(Json&& obj) noexcept
   parent_ = obj.parent_;
   key_ = obj.key_;
   value_type_ = obj.value_type_;
-  string_ = obj.string_;
-  number_ = obj.number_;
 
   obj.parent_ = nullptr;
   obj.key_ = "";
   obj.value_type_ = ValueType::Undefined;
-  obj.string_ = "";
-  obj.number_ = 0;
+  value_ = std::move(obj.value_);
 
   return *this;
 }
 
 Json& Json::AddNewPair()
 {
-  objects_.push_back(std::make_unique<Json>("", this));
-  return *objects_.back();
+  if (!std::holds_alternative<ChildrenList>(value_))
+  {
+    value_ = ChildrenList();
+  }
+  auto& list = std::get<ChildrenList>(value_);
+  list.push_back(std::make_unique<Json>("", this));
+  return *list.back();
 }
 
 Json& Json::AddNewPair(ValueType value_type)
 {
-  objects_.push_back(std::make_unique<Json>("", this));
-  auto& added_object = *objects_.back();
+  auto& list = std::get<ChildrenList>(value_);
+  list.push_back(std::make_unique<Json>("", this));
+  auto& added_object = *list.back();
   added_object.SetType(value_type);
   return added_object;
 }
 
-void Json::SetKey(std::string_view key)
+void Json::SetKey(std::string key)
 {
   key_ = key;
 }
@@ -104,27 +127,16 @@ void Json::SetType(ValueType type)
   value_type_ = type;
 }
 
-void Json::SetValue(const std::string& value)
+void Json::SetParsedValue(const std::string& value)
 {
   switch (value_type_)
   {
-  //case Json::ValueType::Undefined:
-  //  break;
-
   case Json::ValueType::String:
-    string_ = value;
+    value_ = value;
     break;
-
   case Json::ValueType::Number:
-    number_ = std::stold(value);
+    value_ = std::stod(value);
     break;
-
-  //case Json::ValueType::Object:
-  //  break;
-
-  //case Json::ValueType::Array:
-  //  break;
-
   default:
     break;
   }
@@ -133,15 +145,17 @@ void Json::SetValue(const std::string& value)
 
 void Json::ConvertToArray()
 {
-  if (value_type_ == ValueType::Array) return;
-
   std::unique_ptr<Json> copy = std::make_unique<Json>(std::move(*this));
   this->SetType(ValueType::Array);
   this->key_ = copy->key_;
+  this->parent_ = copy->parent_;
 
   copy->key_ = "";
   copy->SetParent(this);
-  this->objects_.push_back(std::move(copy));
+  this->value_ = ChildrenList();
+  auto& children = std::get<ChildrenList>(value_);
+
+  children.push_back(std::move(copy));
 }
 
 Json::ValueType Json::GetType() const
@@ -159,24 +173,9 @@ Json* Json::GetParent() const
   return parent_;
 }
 
-std::vector<std::unique_ptr<Json>>& Json::GetChildren()
+const JsonValue& Json::GetValue() const
 {
-  return objects_;
-}
-
-long double Json::GetNumberValue() const
-{
-  return number_;
-}
-
-const std::string& Json::GetStringValue() const
-{
-  return string_;
-}
-
-bool Json::GetBoolValue() const
-{
-  return value_type_ == ValueType::True ? true : false;
+  return value_;
 }
 
 void Json::SetParent(Json* parent)
@@ -184,12 +183,93 @@ void Json::SetParent(Json* parent)
   parent_ = parent;
 }
 
-void Json::SetValue(long value)
+void Json::SetValue(bool data)
 {
-  //if (value_type_ != ValueType::Null) return;
-  Reset();
-  value_type_ = ValueType::Number;
-  number_ = value;
+  value_ = data;
+  value_type_ = ValueType::Bool;
+}
+
+void Json::ClearValue()
+{
+  value_ = JsonValue();
+  value_type_ = ValueType::Null;
+}
+
+std::unique_ptr<Json> Json::Detach()
+{
+  if (this->IsRoot()) return std::unique_ptr<Json>(nullptr);
+
+  std::unique_ptr<Json> json;
+
+  auto parent = this->GetParent();
+
+  auto& value = parent->value_;
+
+  if (std::holds_alternative<ChildrenList>(value))
+  {
+    auto& children = std::get<ChildrenList>(value);
+
+    for (auto it = std::begin(children); it != std::end(children); it++)
+    {
+      if (it->get() == this)
+      {
+        json = std::unique_ptr<Json>(it->release());
+        children.erase(it);
+        return json;
+      }
+    }
+  }
+
+  return std::unique_ptr<Json>(nullptr);
+}
+
+bool Json::RemoveChild(int index)
+{
+  if (!std::holds_alternative<ChildrenList>(value_)) return false;
+
+  auto& children = std::get<ChildrenList>(value_);
+  children.erase(std::begin(children) + index);
+
+  return true;
+}
+
+bool Json::IsValid() const
+{
+  return value_type_ == ValueType::Undefined ? false : true;
+}
+
+bool Json::IsRoot() const
+{
+  return parent_ == nullptr ? true : false;
+}
+
+bool Json::isArrayElement() const
+{
+  if (parent_ == nullptr) return false;
+  return parent_->GetType() == ValueType::Array;
+}
+
+Json* Json::operator[](std::string_view key)
+{
+  if (value_type_ != ValueType::Object) return nullptr;
+  if (!std::holds_alternative<ChildrenList>(value_)) return nullptr;
+
+  for (auto& child : std::get<ChildrenList>(value_))
+  {
+    if (child->GetKey() == key) return child.get();
+  }
+
+  return nullptr;
+}
+
+Json* Json::operator[](int index)
+{
+  if (value_type_ != ValueType::Object && value_type_ != ValueType::Array) return nullptr;
+  if (!std::holds_alternative<ChildrenList>(value_)) return nullptr;
+
+
+
+  return std::get<ChildrenList>(value_)[index].get();
 }
 
 std::unique_ptr<Json> Json::Parse(const std::string& data)
@@ -201,6 +281,8 @@ std::unique_ptr<Json> Json::Parse(const std::string& data)
   auto it = std::begin(data);
   auto end = std::end(data);
 
+  parsing_state = ParsingState::Started;
+
   for (; it != end; it++)
   {
     switch (*it)
@@ -211,6 +293,9 @@ std::unique_ptr<Json> Json::Parse(const std::string& data)
     case '\t':
     case '\v':
     case ' ':
+      //ignore trailing whitespaces
+      while (it != end && std::isspace(*it)) it++;
+      it--;
       break;
 
     case '{':
@@ -220,6 +305,7 @@ std::unique_ptr<Json> Json::Parse(const std::string& data)
 
     case '[':
       current->SetType(ValueType::Array);
+      current->value_ = ChildrenList();
       parsing_state = ParsingState::Array;
       break;
 
@@ -228,12 +314,25 @@ std::unique_ptr<Json> Json::Parse(const std::string& data)
       break;
     }
 
-    if (parsing_state != ParsingState::Undefined)
+    if ( parsing_state != ParsingState::Undefined
+      && parsing_state != ParsingState::Finished
+      && parsing_state != ParsingState::Started )
     {
-      GetParsingMethod(parsing_state)(++it, end, current);
+      if ((it + 1) != end)
+      {
+        GetParsingMethod(parsing_state)(++it, end, current);
+        parsing_state = current->IsRoot() ? ParsingState::Finished : parsing_state;
+      }
+      else
+      {
+        parsing_state = ParsingState::Undefined;
+      }
     }
-    else
+
+    if (parsing_state == ParsingState::Undefined)
     {
+      root = std::make_unique<Json>();
+      root->SetType(ValueType::Undefined);
       break;
     }
   }
@@ -274,7 +373,7 @@ void Json::ParseString(char_iterator& ch, char_iterator& end, Json* current)
       }
       else if (current->GetType() == ValueType::String)
       {
-        current->SetValue(value);
+        current->SetParsedValue(value);
         parsing_state = ParsingState::Object;
         return;
       }
@@ -312,7 +411,7 @@ void Json::ParseNumber(char_iterator& ch, char_iterator& end, Json* current)
     case ']':
       if (value.back() >= '0' || value.back() <= '9')
       {
-        current->SetValue(value);
+        current->SetParsedValue(value);
         ch--;
         parsing_state = ParsingState::Object;
       }
@@ -441,10 +540,13 @@ void Json::ParseArray(char_iterator& ch, char_iterator& end, Json* current)
     case ' ':
       break;
     case ']':
-      if (current->objects_.size() == 1 &&
-        (*current->objects_.back()).GetType() == ValueType::Undefined)
       {
-        current->objects_.pop_back();
+        auto& list = std::get<ChildrenList>(current->value_);
+        if (list.size() == 1 &&
+          (*list.back()).GetType() == ValueType::Undefined)
+        {
+          list.pop_back();
+        }
       }
       return;
 
@@ -452,6 +554,7 @@ void Json::ParseArray(char_iterator& ch, char_iterator& end, Json* current)
       break;
 
     case '\"':
+    case '[':
     case 't':
     case 'f':
     case 'n':
@@ -471,6 +574,7 @@ void Json::ParseArray(char_iterator& ch, char_iterator& end, Json* current)
       GetParsingMethod(parsing_state)(ch, end, current);
       current = current->parent_;
       break;
+
     case '{':
       parsing_state = ParsingState::Value;
       current = &current->AddNewPair();
@@ -522,10 +626,13 @@ void Json::ParseObject(char_iterator& ch, char_iterator& end, Json* current)
       break;
 
     case '}':
-      current = current->parent_;
-      if (current->objects_.size() > 0 && current->objects_[0]->key_ == "")
       {
-        current->objects_.pop_back();
+        current = current->parent_;
+        auto& list = std::get<ChildrenList>(current->value_);
+        if (list.size() > 0 && list[0]->key_ == "")
+        {
+          list.pop_back();
+        }
       }
       return;
 
@@ -583,7 +690,8 @@ void Json::ParseValue(char_iterator& ch, char_iterator& end, Json* current)
     case 't':
       if (ExpectKeyword(ch, end, "true"))
       {
-        current->SetType(ValueType::True);
+        current->SetType(ValueType::Bool);
+        current->value_ = true;
         parsing_state = ParsingState::Object;
         ch += 3;
       }
@@ -596,7 +704,8 @@ void Json::ParseValue(char_iterator& ch, char_iterator& end, Json* current)
     case 'f':
       if (ExpectKeyword(ch, end, "false"))
       {
-        current->SetType(ValueType::False);
+        current->SetType(ValueType::Bool);
+        current->value_ = false;
         parsing_state = ParsingState::Object;
         ch += 4;
       }
@@ -627,7 +736,8 @@ void Json::ParseValue(char_iterator& ch, char_iterator& end, Json* current)
     case '[':
       current->SetType(ValueType::Array);
       parsing_state = ParsingState::Array;
-      GetParsingMethod(parsing_state)(ch, end, current);
+      current->value_ = ChildrenList();
+      GetParsingMethod(parsing_state)(++ch, end, current);
       return;
 
     case '-':
@@ -689,105 +799,3 @@ bool Json::ExpectKeyword(char_iterator& ch, char_iterator& end, std::string keyw
   return false;
 }
 
-Json* Json::AddChild(std::string_view data, std::string_view key)
-{
-  if (key.empty()) return nullptr;
-  if (this->value_type_ != ValueType::Object) return nullptr;
-
-  this->AddNewPair(ValueType::String);
-  auto& new_object = objects_.back();
-  new_object->key_ = key;
-  new_object->string_ = data;
-
-  return new_object.get();
-}
-
-Json* Json::AddChild(bool data, std::string_view key)
-{
-  if (key.empty()) return nullptr;
-  if (value_type_ == ValueType::Null)
-  {
-    value_type_ = ValueType::Object;
-  }
-  else if (this->value_type_ != ValueType::Object) return nullptr;
-
-  ValueType value_type = data == true ? ValueType::True : ValueType::False;
-  this->AddNewPair(value_type);
-  auto& new_object = objects_.back();
-  new_object->key_ = key;
-
-  return new_object.get();
-}
-
-Json* Json::AddChild(std::string_view key)
-{
-  if (key.empty()) return nullptr;
-  if (this->value_type_ != ValueType::Object) return nullptr;
-
-  this->AddNewPair(ValueType::Null);
-  auto& new_object = objects_.back();
-  new_object->key_ = key;
-
-  return new_object.get();
-}
-
-Json* Json::AddValue(long double data)
-{
-  if (value_type_ == ValueType::Array)
-  {
-
-  }
-  else {
-    this->ConvertToArray();
-    auto& newValue = this->AddNewPair(ValueType::Number);
-    newValue.SetValue(data);
-  }
-  return nullptr;
-}
-
-void Json::Reset()
-{
-  value_type_ = ValueType::Null;
-  string_.clear();
-  number_ = 0;
-  objects_.clear();
-}
-
-Json* Json::AddChild(long data, std::string_view key)
-{
-  if (key.empty()) return nullptr;
-  if (this->value_type_ != ValueType::Object) return nullptr;
-
-  this->AddNewPair(ValueType::Number);
-  auto& new_object = objects_.back();
-  new_object->key_ = key;
-  new_object->number_ = data;
-
-  return new_object.get();
-}
-
-Json* Json::AddChild(double data, std::string_view key)
-{
-  if (key.empty()) return nullptr;
-  if (this->value_type_ != ValueType::Object) return nullptr;
-
-  this->AddNewPair(ValueType::Number);
-  auto& new_object = objects_.back();
-  new_object->key_ = key;
-  new_object->number_ = data;
-
-  return new_object.get();
-}
-
-Json* Json::AddChild(int data, std::string_view key)
-{
-  if (key.empty()) return nullptr;
-  if (this->value_type_ != ValueType::Object) return nullptr;
-
-  this->AddNewPair(ValueType::Number);
-  auto& new_object = objects_.back();
-  new_object->key_ = key;
-  new_object->number_ = data;
-
-  return new_object.get();
-}

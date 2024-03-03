@@ -4,32 +4,32 @@
 
 int main()
 {
-  File my_file("testFiles/temp.txt");
 
-  //if (my_file.Load())
-  //{
-  //  std::cout << my_file.GetContent() << std::endl;
+  std::variant<std::string, double> v;
 
-  //  auto ptr = Json::Parse(my_file.GetContent());
+  auto json = Json::Parse(R"(   
+  {
+    "key" : "value",
+    "key1" : [[ 13.2, "dasd"], true]
+  }   
+)");
 
-  //  Json first("first1", nullptr);
-  //  first.SetValue(5);
-  //  //auto temp = first.AddChild(true, "wow");
-  //  if (first.AddChild(1.3l, "da") == nullptr) {
-  //    std::cout << "nullptr :<" << std::endl;
-  //  }
+  if (!json->IsValid())
+  {
+    std::cout << "Json is invalid" << std::endl;
+  }
 
-  //  ptr->AddChild(first);
-  //}
+  auto test = (*json)[0];
 
-  auto root = std::make_unique<Json>();
+  const std::string temp1 = "asdf";
 
-  root->AddChild(true, "bool");
-  root->AddChild(5l, "number");
-  auto child = root->AddChild(Json("temp", nullptr));
-  child->AddChild(true, "bool");
-  child->AddChild(5.0l, "number");
-  child->AddValue(12.3l);
+  test->SetValue(temp1);
+
+  std::string_view asd = "asdas";
+
+  auto coto = json->AddChild(14.5, "wow");
+  coto->AddValue(true);
+  auto item = (*coto)[1]->Detach();
 
   return 0;
 }
