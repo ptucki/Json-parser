@@ -174,7 +174,7 @@ void Json::ToString(std::string& str) const
       }
       else
       {
-        str += std::format("\"{}\" : \"{}\"", key_, value);
+        str += std::format("\"{}\":\"{}\"", key_, value);
       }
     }
     break;
@@ -189,7 +189,7 @@ void Json::ToString(std::string& str) const
       }
       else
       {
-        str += std::format("\"{}\" : {}", key_, std::to_string(value));
+        str += std::format("\"{}\":{}", key_, std::to_string(value));
       }
     }
     break;
@@ -205,7 +205,7 @@ void Json::ToString(std::string& str) const
       else
       {
         std::string bool_value = value == true ? "true" : "false";
-        str += std::format("\"{}\" : {}", key_, bool_value);
+        str += std::format("\"{}\":{}", key_, bool_value);
       }
     }
     break;
@@ -218,7 +218,7 @@ void Json::ToString(std::string& str) const
       }
       else
       {
-        str += std::format("\"{}\" : {{", key_);
+        str += std::format("\"{}\":{{", key_);
       }
       
       ForEachChild([&str](const Json& child) -> void {
@@ -237,7 +237,7 @@ void Json::ToString(std::string& str) const
     }
     else
     {
-      str += std::format("\"{}\" : [", key_);
+      str += std::format("\"{}\":[", key_);
     }
 
     ForEachChild([&str](const Json& child) -> void {
@@ -255,7 +255,7 @@ void Json::ToString(std::string& str) const
     }
     else
     {
-      str += std::format("\"{}\" : null", key_);
+      str += std::format("\"{}\":null", key_);
     }
   }
     break;

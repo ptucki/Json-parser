@@ -30,6 +30,13 @@ using JsonValue = std::variant<String, Number, Bool, ChildrenList>;
 template<class T>
 concept StringLike = std::is_convertible_v<T, std::string_view>;
 
+template<class T>
+concept Predicate = requires(T predicate, const Json & a)
+{
+  { predicate(a) } -> std::same_as<bool>;
+};
+
+
 class Json {
 
   using char_iterator = std::string::const_iterator;
@@ -95,6 +102,34 @@ public:
 
   /* Json conversion to string */
   std::string ToString() const;
+
+  /* Searching methods */
+  template<Predicate T>
+  Json* FindIf(const T& predicate);
+
+  template<Predicate T>
+  std::list<Json*> FindAllIf(const T& predicate)
+  {
+    std::list<Json*> list;
+
+    auto result = predicate(*this);
+    if (result) list.push_back(*this);
+
+    std::list<Json*> children_list;
+
+    if (std::holds_alternative<ChildrenList>(value_))
+    {
+      auto& children = std::get<ChildrenList>(value_);
+      for (auto& element : children)
+      {
+        children_list.splice(children_list.end(), element->FindAllIf(predicate));
+      }
+    }
+
+    children_list.splice(children_list.end(), list);
+
+    return children_list;
+  }
 
   /* Parsing methods */
   static std::unique_ptr<Json> Parse(const std::string& data);
@@ -216,6 +251,28 @@ Json* Json::AddValue(T&& data)
   }
 
   return nullptr;
+}
+
+template<Predicate T>
+Json* Json::FindIf(const T& predicate) {
+  Json* found = nullptr;
+  auto result = predicate(*this);
+  if (!result) {
+
+    if (std::holds_alternative<ChildrenList>(value_))
+    {
+      auto& children = std::get<ChildrenList>(value_);
+      for (auto& element : children)
+      {
+        found = element->FindIf(predicate);
+      }
+    }
+
+  }
+  else {
+    found = this;
+  }
+  return found;
 }
 
 #endif // !JSON_H

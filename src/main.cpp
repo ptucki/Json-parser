@@ -2,6 +2,10 @@
 #include "file.h"
 #include "json.h"
 
+bool Checker(const Json& obj) {
+  return obj.GetKey() == "wow";
+}
+
 int main()
 {
 
@@ -32,7 +36,14 @@ int main()
 
   std::cout << json->ToString() << std::endl;;
 
-  
+  bool(*wow)(const Json & obj) = &Checker;
+
+
+  auto temp = json->FindAllIf([](auto obj) {
+    return obj.GetKey().find('e') != std::string::npos;
+    //return obj.GetKey() == "wow";
+    });
+
 
   return 0;
 }
