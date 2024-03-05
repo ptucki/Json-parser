@@ -38,10 +38,6 @@ concept Predicate = requires(T predicate, const Json & a)
 
 
 class Json {
-
-  using char_iterator = std::string::const_iterator;
-  using ParsingMethodType = void(*)(char_iterator&, char_iterator&, Json*);
-
 public:
 
   enum class ValueType {
@@ -136,39 +132,8 @@ public:
 
 private:
 
-  enum class ParsingState {
-    Undefined = -1,
-    Object,
-    Array,
-    Key,
-    Value,
-    String,
-    Number,
-    BooleanNull,
-    Null,
-    EscapeChar,
-    Started,
-    Finished
-  };
-
   /* Accessors and mutators */
   void SetType(ValueType type);
-
-  /* Parsing methods */
-  static void ParseString(char_iterator& ch, char_iterator& end, Json* current);
-  static void ParseArray(char_iterator& ch, char_iterator& end, Json* current);
-  static void ParseObject(char_iterator& ch, char_iterator& end, Json* current);
-  static void ParseValue(char_iterator& ch, char_iterator& end, Json* current);
-  static void ParseNumber(char_iterator& ch, char_iterator& end, Json* current);
-  static void ParseEscapeChar(char_iterator& ch, char_iterator& end, std::string& str);
-  static ParsingMethodType GetParsingMethod(ParsingState state);
-  static bool ExpectKeyword(char_iterator& ch, char_iterator& end, std::string expected_value);
-  void SetParsedValue(const std::string& value);
-
-  /* Maniputaion methods */
-  Json& AddNewPair();
-  Json& AddNewPair(ValueType value_type);
-  
   void ConvertToArray();
 
   /* Json conversion to string */
@@ -181,7 +146,7 @@ private:
   ValueType value_type_;
   JsonValue value_;
 
-  static ParsingState parsing_state;
+  friend class JsonParser;
 };
 
 

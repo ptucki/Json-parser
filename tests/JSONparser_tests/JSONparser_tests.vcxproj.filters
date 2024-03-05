@@ -24,6 +24,9 @@
     <ClInclude Include="src\parsing-json.h">
       <Filter>TestSuites</Filter>
     </ClInclude>
+    <ClInclude Include="..\..\src\json_parser.h">
+      <Filter>Sources</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="src\main.cpp">
@@ -38,5 +41,11 @@
     <ClCompile Include="src\parsing-json.cpp">
       <Filter>TestSuites</Filter>
     </ClCompile>
+    <ClCompile Include="..\..\src\json_parser.cpp">
+      <Filter>Sources</Filter>
+    </ClCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="packages.config" />
   </ItemGroup>
 </Project>

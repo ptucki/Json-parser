@@ -21,12 +21,18 @@
     <ClCompile Include="src\json.cpp">
       <Filter>JSONparser</Filter>
     </ClCompile>
+    <ClCompile Include="src\json_parser.cpp">
+      <Filter>JSONparser</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="src\Common\file.h">
       <Filter>Common</Filter>
     </ClInclude>
     <ClInclude Include="src\json.h">
+      <Filter>JSONparser</Filter>
+    </ClInclude>
+    <ClInclude Include="src\json_parser.h">
       <Filter>JSONparser</Filter>
     </ClInclude>
   </ItemGroup>
