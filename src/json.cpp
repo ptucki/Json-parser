@@ -3,6 +3,7 @@
 #include <cassert>
 #include <string>
 #include <format>
+#include <chrono>
 
 #include "json.h"
 #include "json_parser.h"
@@ -98,16 +99,29 @@ Json& Json::operator=(Json&& obj) noexcept
 }
 
 
-std::unique_ptr<Json> Json::Parse(const std::string& data)
+std::unique_ptr<Json> Json::Parse(const std::string& data, std::function<void(size_t)> progress_callback)
 {
   JsonParser parser;
-  return parser.Parse(data);
+  return parser.Parse(data, progress_callback);
 }
 
 
-void Json::SetKey(std::string key)
+bool Json::SetKey(std::string key)
 {
-  key_ = key;
+  auto parent = this->GetParent();
+  bool key_exists = false;
+
+  if (std::holds_alternative<ChildrenList>(parent->value_))
+  {
+    auto& children = std::get<ChildrenList>(parent->value_);
+
+    for (auto& child : children) {
+      if (child->GetKey() == key) return false;
+    }
+
+  }
+  key_ = key_exists ? key_ : key;
+  return true;
 }
 
 void Json::SetType(ValueType type)

@@ -64,7 +64,7 @@ public:
   Json* GetParent() const;
   const JsonValue& GetValue() const;
 
-  void SetKey(std::string name);
+  bool SetKey(std::string name);
   void SetParent(Json* parent);
 
   template<StringLike T>
@@ -109,7 +109,7 @@ public:
     std::list<Json*> list;
 
     auto result = predicate(*this);
-    if (result) list.push_back(*this);
+    if (result) list.push_back(this);
 
     std::list<Json*> children_list;
 
@@ -128,7 +128,7 @@ public:
   }
 
   /* Parsing methods */
-  static std::unique_ptr<Json> Parse(const std::string& data);
+  static std::unique_ptr<Json> Parse(const std::string& data, const std::function<void(size_t)> = std::function<void(size_t)>());
 
 private:
 

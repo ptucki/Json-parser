@@ -3,7 +3,11 @@
 
 #include <string>
 #include <memory>
+#include <thread>
+#include <iostream>
 #include "json.h"
+
+#define JSON_PROGESS_READ_TIME 1000
 
 class JsonParser
 {
@@ -12,12 +16,15 @@ class JsonParser
 
 public:
   JsonParser();
-  std::unique_ptr<Json> Parse(const std::string& data);
+  std::unique_ptr<Json> Parse(const std::string& data, const std::function<void(size_t)>& progress_callback);
 
 private:
   enum class ParsingState {
     Undefined = -1,
-    Object,
+    Finished,
+    Started,
+
+    Object = 10,
     Array,
     Key,
     Value,
@@ -25,9 +32,28 @@ private:
     Number,
     BooleanNull,
     Null,
-    EscapeChar,
-    Started,
-    Finished
+    EscapeChar };
+
+  class ProgressManager {
+  public:
+    ProgressManager(size_t data_size, const std::function<void(size_t)>& progress_callback, char_iterator& begin, char_iterator& end, std::atomic<ParsingState>& parsing_state);
+    ~ProgressManager();
+
+
+  private:
+
+    void InvokeCallback(size_t progress);
+    void LoopProgressRead();
+    bool IsParsingInProgress() const;
+    size_t GetCurrentProgress() const;
+
+    size_t data_size_;
+    std::function<void(size_t)> callback_;
+    std::jthread thread_;
+    std::atomic<bool> stop_flag_;
+    const std::atomic<ParsingState>& parsing_state_;
+    const char_iterator& begin_;
+    const char_iterator& end_;
   };
 
   /* Parsing methods */
@@ -44,7 +70,9 @@ private:
   void SetParsedValue(const std::string& value, Json* current);
   Json* AddNewPair(Json* current);
 
-  ParsingState parsing_state_;
+  std::atomic<ParsingState> parsing_state_;
 };
+
+
 
 #endif // !JSON_PARSER_H

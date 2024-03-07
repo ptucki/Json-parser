@@ -2,48 +2,17 @@
 #include "file.h"
 #include "json.h"
 
-bool Checker(const Json& obj) {
-  return obj.GetKey() == "wow";
-}
-
 int main()
 {
+  File my_file("testFiles/temp.txt");
 
-  std::variant<std::string, double> v;
-
-  auto json = Json::Parse(R"(   
+  if (my_file.Load())
   {
-    "key" : "value",
-    "key1" : [[ 13.2, "dasd"], true]
-  }   
-)");
+    auto ptr = Json::Parse(my_file.GetContent(), [](auto progress) {
+      std::cout << progress << std::endl;
+      });
 
-  if (!json->IsValid())
-  {
-    std::cout << "Json is invalid" << std::endl;
   }
-
-  auto test = (*json)[0]; 
-
-  const std::string temp1 = "asdf";
-
-  test->SetValue(temp1);
-
-  std::string_view asd = "asdas";
-
-  auto coto = json->AddChild(14.5, "wow");
-  coto->AddValue(true);
-
-  std::cout << json->ToString() << std::endl;;
-
-  bool(*wow)(const Json & obj) = &Checker;
-
-
-  auto temp = json->FindAllIf([](auto obj) {
-    return obj.GetKey().find('e') != std::string::npos;
-    //return obj.GetKey() == "wow";
-    });
-
 
   return 0;
 }

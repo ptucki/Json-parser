@@ -35,8 +35,9 @@ void JsonParser::SetParsedValue(const std::string& value, Json* current)
 
 }
 
-std::unique_ptr<Json> JsonParser::Parse(const std::string& data)
+std::unique_ptr<Json> JsonParser::Parse(const std::string& data, const std::function<void(size_t)>& progress_callback)
 {
+
   auto root_ = std::make_unique<Json>("", nullptr);
   root_->SetType(Json::ValueType::Undefined);
   auto current = root_.get();
@@ -45,6 +46,7 @@ std::unique_ptr<Json> JsonParser::Parse(const std::string& data)
   auto end = std::end(data);
 
   parsing_state_ = ParsingState::Started;
+  ProgressManager progress_manager{ data.size(), progress_callback, it, end, parsing_state_};
 
   for (; it != end; it++)
   {
@@ -84,7 +86,7 @@ std::unique_ptr<Json> JsonParser::Parse(const std::string& data)
       if ((it + 1) != end)
       {
         std::invoke(GetParsingMethod(parsing_state_), this, ++it, end, current);
-        parsing_state_ = current->IsRoot() ? ParsingState::Finished : parsing_state_;
+        parsing_state_ = current->IsRoot() ? ParsingState::Finished : parsing_state_.load();
       }
       else
       {
@@ -562,4 +564,54 @@ bool JsonParser::ExpectKeyword(char_iterator& ch, char_iterator& end, std::strin
   }
 
   return false;
+}
+
+JsonParser::ProgressManager::~ProgressManager()
+{
+  stop_flag_ = true;
+}
+
+JsonParser::ProgressManager::ProgressManager (size_t data_size, const std::function<void(size_t)>& progress_callback, char_iterator& begin, char_iterator& end, std::atomic<ParsingState>& parsing_state)
+  : data_size_{ data_size }
+  , callback_{ progress_callback }
+  , stop_flag_{ false }
+  , begin_{ begin }
+  , end_{ end }
+  , parsing_state_{ parsing_state }
+{
+  if (callback_)
+  {
+    thread_ = std::jthread(&ProgressManager::LoopProgressRead, this);
+  }
+}
+
+void JsonParser::ProgressManager::InvokeCallback(size_t progress)
+{
+  if (callback_) callback_(progress);
+}
+
+void JsonParser::ProgressManager::LoopProgressRead()
+{
+  std::chrono::milliseconds timespan(JSON_PROGESS_READ_TIME);
+
+  while (IsParsingInProgress())
+  {
+    auto current_progress = GetCurrentProgress();
+    callback_(current_progress);
+    std::this_thread::sleep_for(timespan);
+  }
+  callback_(GetCurrentProgress());
+}
+
+bool JsonParser::ProgressManager::IsParsingInProgress() const
+{
+  constexpr auto underlying = [](auto value) {
+    return std::underlying_type_t<ParsingState>(value);
+  };
+  return underlying(parsing_state_.load()) > underlying(JsonParser::ParsingState::Finished) && !stop_flag_;
+}
+
+size_t JsonParser::ProgressManager::GetCurrentProgress() const
+{
+  return (100* (data_size_ - std::distance(begin_, end_))) / data_size_;
 }
