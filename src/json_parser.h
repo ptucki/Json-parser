@@ -9,6 +9,8 @@
 
 #define JSON_PROGESS_READ_TIME 1000
 
+
+
 class JsonParser
 {
   using char_iterator = std::string::const_iterator;
@@ -16,11 +18,12 @@ class JsonParser
 
 public:
   JsonParser();
-  std::unique_ptr<Json> Parse(const std::string& data, const std::function<void(size_t)>& progress_callback);
+  std::unique_ptr<Json> Parse(const std::string& data, const ProgresCallback& progress_callback);
 
 private:
   enum class ParsingState {
     Undefined = -1,
+    Interrupted,
     Finished,
     Started,
 
@@ -36,10 +39,18 @@ private:
 
   class ProgressManager {
   public:
-    ProgressManager(size_t data_size, const std::function<void(size_t)>& progress_callback, char_iterator& begin, char_iterator& end, std::atomic<ParsingState>& parsing_state);
+    ProgressManager(
+      size_t data_size,
+      const ProgresCallback& progress,
+      char_iterator& begin,
+      char_iterator& end,
+      std::atomic<ParsingState>& parsing_state,
+      std::atomic<bool>& stop_flag
+    );
+
     ~ProgressManager();
 
-
+    const std::atomic<bool>& isStopped() const;
   private:
 
     void InvokeCallback(size_t progress);
@@ -48,9 +59,9 @@ private:
     size_t GetCurrentProgress() const;
 
     size_t data_size_;
-    std::function<void(size_t)> callback_;
+    ProgresCallback callback_;
     std::jthread thread_;
-    std::atomic<bool> stop_flag_;
+    std::atomic<bool>& stop_flag_;
     const std::atomic<ParsingState>& parsing_state_;
     const char_iterator& begin_;
     const char_iterator& end_;
@@ -69,7 +80,7 @@ private:
   /* Maniputaion methods */
   void SetParsedValue(const std::string& value, Json* current);
   Json* AddNewPair(Json* current);
-
+  std::atomic<bool> stop_flag_;
   std::atomic<ParsingState> parsing_state_;
 };
 

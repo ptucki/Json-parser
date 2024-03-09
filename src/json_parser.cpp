@@ -5,6 +5,7 @@
 
 JsonParser::JsonParser()
   : parsing_state_{ ParsingState::Undefined }
+  , stop_flag_{ false }
 {
 }
 
@@ -35,9 +36,8 @@ void JsonParser::SetParsedValue(const std::string& value, Json* current)
 
 }
 
-std::unique_ptr<Json> JsonParser::Parse(const std::string& data, const std::function<void(size_t)>& progress_callback)
+std::unique_ptr<Json> JsonParser::Parse(const std::string& data, const ProgresCallback& progress_callback)
 {
-
   auto root_ = std::make_unique<Json>("", nullptr);
   root_->SetType(Json::ValueType::Undefined);
   auto current = root_.get();
@@ -46,7 +46,7 @@ std::unique_ptr<Json> JsonParser::Parse(const std::string& data, const std::func
   auto end = std::end(data);
 
   parsing_state_ = ParsingState::Started;
-  ProgressManager progress_manager{ data.size(), progress_callback, it, end, parsing_state_};
+  ProgressManager progress_manager{ data.size(), progress_callback, it, end, parsing_state_, stop_flag_};
 
   for (; it != end; it++)
   {
@@ -112,7 +112,7 @@ void JsonParser::ParseString(char_iterator& ch, char_iterator& end, Json* curren
   std::string value = "";
   ++ch;
 
-  while (ch != end)
+  while (ch != end && !stop_flag_)
   {
     switch (*ch)
     {
@@ -163,7 +163,7 @@ void JsonParser::ParseNumber(char_iterator& ch, char_iterator& end, Json* curren
   value.append(1, *ch);
   ++ch;
 
-  while (ch != end)
+  while (ch != end && !stop_flag_)
   {
     switch (*ch)
     {
@@ -295,7 +295,7 @@ void JsonParser::ParseEscapeChar(char_iterator& ch, char_iterator& end, std::str
 
 void JsonParser::ParseArray(char_iterator& ch, char_iterator& end, Json* current)
 {
-  while (ch != end)
+  while (ch != end && !stop_flag_)
   {
     switch (*ch)
     {
@@ -367,7 +367,7 @@ void JsonParser::ParseObject(char_iterator& ch, char_iterator& end, Json* curren
   std::string name = "";
   bool is_key_set = false;
 
-  while (ch != end)
+  while (ch != end && !stop_flag_)
   {
     switch (*ch)
     {
@@ -435,7 +435,7 @@ void JsonParser::ParseValue(char_iterator& ch, char_iterator& end, Json* current
 {
   std::string value = "";
 
-  while (ch != end)
+  while (ch != end && !stop_flag_)
   {
     switch (*ch)
     {
@@ -571,10 +571,21 @@ JsonParser::ProgressManager::~ProgressManager()
   stop_flag_ = true;
 }
 
-JsonParser::ProgressManager::ProgressManager (size_t data_size, const std::function<void(size_t)>& progress_callback, char_iterator& begin, char_iterator& end, std::atomic<ParsingState>& parsing_state)
+const std::atomic<bool>& JsonParser::ProgressManager::isStopped() const
+{
+  return stop_flag_;
+}
+
+JsonParser::ProgressManager::ProgressManager (
+  size_t data_size,
+  const ProgresCallback& progress,
+  char_iterator& begin,
+  char_iterator& end,
+  std::atomic<ParsingState>& parsing_state,
+  std::atomic<bool>& stop_flag)
   : data_size_{ data_size }
-  , callback_{ progress_callback }
-  , stop_flag_{ false }
+  , callback_{ progress }
+  , stop_flag_{ stop_flag }
   , begin_{ begin }
   , end_{ end }
   , parsing_state_{ parsing_state }
@@ -587,7 +598,10 @@ JsonParser::ProgressManager::ProgressManager (size_t data_size, const std::funct
 
 void JsonParser::ProgressManager::InvokeCallback(size_t progress)
 {
-  if (callback_) callback_(progress);
+  if (callback_)
+  {
+    stop_flag_ = !callback_(progress);
+  }
 }
 
 void JsonParser::ProgressManager::LoopProgressRead()
@@ -597,7 +611,7 @@ void JsonParser::ProgressManager::LoopProgressRead()
   while (IsParsingInProgress())
   {
     auto current_progress = GetCurrentProgress();
-    callback_(current_progress);
+    InvokeCallback(current_progress);
     std::this_thread::sleep_for(timespan);
   }
   callback_(GetCurrentProgress());

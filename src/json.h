@@ -27,6 +27,8 @@ using Array = std::vector<std::unique_ptr<Json>>;
 
 using JsonValue = std::variant<String, Number, Bool, ChildrenList>;
 
+using ProgresCallback = std::function<bool(size_t)>;
+
 template<class T>
 concept StringLike = std::is_convertible_v<T, std::string_view>;
 
@@ -35,6 +37,7 @@ concept Predicate = requires(T predicate, const Json & a)
 {
   { predicate(a) } -> std::same_as<bool>;
 };
+
 
 
 class Json {
@@ -82,6 +85,7 @@ public:
   bool IsRoot() const;
   bool IsArrayElement() const;
   bool IsLastChild() const;
+  Json* GetRoot();
 
   Json* operator[](std::string_view key);
   Json* operator[](int index);
@@ -128,7 +132,7 @@ public:
   }
 
   /* Parsing methods */
-  static std::unique_ptr<Json> Parse(const std::string& data, const std::function<void(size_t)> = std::function<void(size_t)>());
+  static std::unique_ptr<Json> Parse(const std::string& data, const ProgresCallback = ProgresCallback());
 
 private:
 

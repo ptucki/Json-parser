@@ -99,7 +99,7 @@ Json& Json::operator=(Json&& obj) noexcept
 }
 
 
-std::unique_ptr<Json> Json::Parse(const std::string& data, std::function<void(size_t)> progress_callback)
+std::unique_ptr<Json> Json::Parse(const std::string& data, ProgresCallback progress_callback)
 {
   JsonParser parser;
   return parser.Parse(data, progress_callback);
@@ -346,6 +346,17 @@ bool Json::IsLastChild() const
 {
   auto& parents_value = std::get<ChildrenList>(parent_->value_);
   return parents_value.back().get() == this;
+}
+
+Json* Json::GetRoot()
+{
+  auto node = this;
+  while (node->GetParent() != nullptr)
+  {
+    node = node->GetParent();
+  }
+
+  return node;
 }
 
 Json* Json::operator[](std::string_view key)

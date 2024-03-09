@@ -10,6 +10,7 @@ int main()
   {
     auto ptr = Json::Parse(my_file.GetContent(), [](auto progress) {
       std::cout << progress << std::endl;
+      return progress < 40;
       });
 
   }
